@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<!-- Load d3.js -->
+<script src="https://d3js.org/d3.v6.js"></script>
+
+<!-- Create an element where the map will take place -->
+<svg id="my_dataviz" width="1600" height="1600"></svg>
+
+<script>
+
+// The svg
+const svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+
+// Map and projection
+const projection = d3.geoMercator()
+    .center([2, 48])                // GPS of location to zoom on
+    .scale(4000)                       // This is like the zoom
+    .translate([ width/2, height/2 ])
+
+Promise.all([
+d3.json("https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions-avant-redecoupage-2015.geojson"),
+d3.csv("operations.csv")
+]).then(function (initialize) {
+
+    let dataGeo = initialize[0]
+
+    let data = initialize[1].filter(function(d)
+    {
+
+        if(d["Target Country"] == "FRANCE" && projection([+d["Target Longitude"], +d["Target Latitude"]])[1] == projection([+d["Target Longitude"], +d["Target Latitude"]])[1])
+        {
+            return d;
+        }
+
+    });
+
+    console.log(data);
+
+  // Create a color scale
+  const color = d3.scaleOrdinal()
+    .domain(["USA", "GREAT BRITAIN", "AUSTRALIA", "NEW ZEALAND", "SOUTH AFRICA"])
+    .range(["#0000FF", "#FF0000" , "#00FF00", "#00FF99", "#55FF00"]);
+
+  // Add a scale for bubble size
+  const valueExtent = d3.extent(data, d => +d["Total Weight (Tons)"])
+  const size = d3.scaleSqrt()
+    .domain(valueExtent)  // What's in the data
+    .range([ 1, 15])  // Size in pixel
+
+  // Draw the map
+  svg.append("g")
+      .selectAll("path")
+      .data(dataGeo.features)
+      .join("path")
+        .attr("fill", "#b8b8b8")
+        .attr("d", d3.geoPath()
+            .projection(projection)
+        )
+      .style("stroke", "none")
+      .style("opacity", .3)
+
+  // Add circles:
+  //data.sort((a,b) => +b.n - +a.n).filter((d,i) => i<1000)
+  svg
+    .selectAll("myCircles")
+    .data(data)
+    .join("circle")
+      .attr("cx", d => projection([+d["Target Longitude"], +d["Target Latitude"]])[0] + Math.random()*5)
+      .attr("cy", d => projection([+d["Target Longitude"], +d["Target Latitude"]])[1] + Math.random()*5)
+      .attr("r", d => size(+d["Total Weight (Tons)"]))
+      .style("fill", d => {if(d["Country"] == "") {return "gray"} else {return color(d["Country"])}})
+      .attr("stroke", d=> {if (d["Total Weight (Tons)"]>750) {return "black"} else {return "none"}  })
+      .attr("stroke-width", 1)
+      .attr("fill-opacity", .2)
+
+
+
+  // Add title and explanation
+  svg
+    .append("text")
+      .attr("text-anchor", "end")
+      .style("fill", "black")
+      .attr("x", width/2)
+      .attr("y", 400)
+      .attr("width", 90)
+      .html("Allied bombings in France (1939-1945)")
+      .style("font-size", 36)
+
+
+  // --------------- //
+  // ADD LEGEND //
+  // --------------- //
+
+  // Add legend: circles
+  const valuesToShow = [250,1000, 2000]
+  const xCircle = 40
+  const xLabel = 90
+
+  const countriesToMap = ["GREAT BRITAIN", "USA", "UNDEFINED"];
+  svg
+    .selectAll("legend")
+    .data(valuesToShow)
+    .join("circle")
+      .attr("cx", xCircle)
+      .attr("cy", d => height/2 - size(d))
+      .attr("r", d => size(d))
+      .style("fill", "none")
+      .attr("stroke", "black")
+
+  // Adding color legend
+  svg
+    .selectAll("legend")
+    .data(countriesToMap)
+    .join("circle")
+      .attr("cx", xCircle)
+      .attr("cy",(d, i) => height/2 + height/20 + i*height/40 - size(1000))
+      .attr("r", size(1000))
+      .style("fill", d=> {if(d == "UNDEFINED") {return "gray"} else {return color(d)}})
+      .attr("stroke", "black")
+
+  // Add legend: segments
+  svg
+    .selectAll("legend")
+    .data(valuesToShow)
+    .join("line")
+      .attr('x1', d => xCircle + size(d))
+      .attr('x2', xLabel)
+      .attr('y1', d => height/2 - size(d))
+      .attr('y2', d => height/2 - size(d))
+      .attr('stroke', 'black')
+      .style('stroke-dasharray', ('2,2'))
+
+  // Add legend: labels
+  svg
+    .selectAll("legend")
+    .data(valuesToShow)
+    .join("text")
+      .attr('x', xLabel)
+      .attr('y', d => height/2 - 1.25*size(d))
+      .text(d => d)
+      .style("font-size", 12)
+      .attr('alignment-baseline', 'middle')
+
+  svg
+    .selectAll("legend")
+    .data(countriesToMap)
+    .join("text")
+      .attr('x', xLabel)
+      .attr('y', (d, i) => height/2 + height/20 + i*height/40 - size(1000))
+      .text(d => d)
+      .style("font-size", 20)
+      .attr('alignment-baseline', 'middle')
+   })
+
+</script>
